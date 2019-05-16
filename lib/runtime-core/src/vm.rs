@@ -1,4 +1,4 @@
-pub use crate::backing::{ImportBacking, LocalBacking};
+pub use crate::backing::{ImportBacking, LocalBacking, INTERNALS_SIZE};
 use crate::{
     memory::{Memory, MemoryType},
     module::{ModuleInfo, ModuleInner},
@@ -92,6 +92,8 @@ pub struct InternalCtx {
 
     pub memory_base: *mut u8,
     pub memory_bound: usize,
+
+    pub internals: *mut [u64; INTERNALS_SIZE], // TODO: Make this dynamic?
 }
 
 #[repr(C)]
@@ -200,6 +202,8 @@ impl Ctx {
 
                 memory_base: mem_base,
                 memory_bound: mem_bound,
+
+                internals: &mut local_backing.internals.0,
             },
             local_functions: local_backing.local_functions.as_ptr(),
 
@@ -249,6 +253,8 @@ impl Ctx {
 
                 memory_base: mem_base,
                 memory_bound: mem_bound,
+
+                internals: &mut local_backing.internals.0,
             },
             local_functions: local_backing.local_functions.as_ptr(),
 
@@ -356,8 +362,12 @@ impl Ctx {
         11 * (mem::size_of::<usize>() as u8)
     }
 
-    pub fn offset_local_functions() -> u8 {
+    pub fn offset_internals() -> u8 {
         12 * (mem::size_of::<usize>() as u8)
+    }
+
+    pub fn offset_local_functions() -> u8 {
+        13 * (mem::size_of::<usize>() as u8)
     }
 }
 
@@ -573,6 +583,11 @@ mod vm_offset_tests {
         );
 
         assert_eq!(
+            Ctx::offset_internals() as usize,
+            offset_of!(InternalCtx => internals).get_byte_offset(),
+        );
+
+        assert_eq!(
             Ctx::offset_local_functions() as usize,
             offset_of!(Ctx => local_functions).get_byte_offset(),
         );
@@ -684,6 +699,8 @@ mod vm_ctx_tests {
 
             dynamic_sigindices: Map::new().into_boxed_map(),
             local_functions: Map::new().into_boxed_map(),
+
+            internals: crate::backing::Internals([0; crate::backing::INTERNALS_SIZE]),
         };
         let mut import_backing = ImportBacking {
             memories: Map::new().into_boxed_map(),
